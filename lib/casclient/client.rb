@@ -2,6 +2,7 @@ module CASClient
   # The client brokers all HTTP transactions with the CAS server.
   class Client
     attr_reader :cas_base_url, :cas_destination_logout_param_name
+    attr_reader :cas_basic_auth_username, :cas_basic_auth_passwd
     attr_reader :log, :username_session_key, :extra_attributes_session_key
     attr_reader :ticket_store
     attr_reader :proxy_host, :proxy_port
@@ -23,7 +24,9 @@ module CASClient
         end
       end
 
-      @cas_base_url      = conf[:cas_base_url].gsub(/\/$/, '')
+      @cas_base_url             = conf[:cas_base_url].gsub(/\/$/, '')
+      @cas_basic_auth_username  = conf[:cas_basic_auth_username]
+      @cas_basic_auth_passwd    = conf[:cas_basic_auth_passwd]
       @cas_destination_logout_param_name = conf[:cas_destination_logout_param_name]
 
       @login_url    = conf[:login_url]
@@ -31,7 +34,7 @@ module CASClient
       @validate_url = conf[:validate_url]
       @proxy_url    = conf[:proxy_url]
       @service_url  = conf[:service_url]
-      @force_ssl_verification  = conf[:force_ssl_verification]
+      @ignore_ssl_verification  = conf[:ignore_ssl_verification]
       @proxy_callback_url  = conf[:proxy_callback_url]
 
       #proxy server settings
@@ -233,7 +236,7 @@ module CASClient
     def https_connection(uri)
       https = Net::HTTP::Proxy(proxy_host, proxy_port).new(uri.host, uri.port)
       https.use_ssl = (uri.scheme == 'https')
-      https.verify_mode = (@force_ssl_verification ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE)
+      https.verify_mode = (@ignore_ssl_verification ? OpenSSL::SSL::VERIFY_NONE : OpenSSL::SSL::VERIFY_PEER)
       https
     end
 
@@ -245,9 +248,9 @@ module CASClient
       uri = URI.parse(uri) unless uri.kind_of? URI
       https = https_connection(uri)
       begin
-        raw_res = https.start do |conn|
-          conn.get("#{uri.path}?#{uri.query}")
-        end
+        req = Net::HTTP::Get.new("#{uri.path}?#{uri.query}")
+        req.basic_auth(cas_basic_auth_username, cas_basic_auth_passwd) if cas_basic_auth_username and cas_basic_auth_passwd
+        raw_res = https.start { |conn| conn.request(req) }
       rescue Errno::ECONNREFUSED => e
         log.error "CAS server did not respond! (#{e.inspect})"
         raise "The CAS authentication server at #{uri} is not responding!"
@@ -271,6 +274,7 @@ module CASClient
       uri = URI.parse(uri) unless uri.kind_of? URI
       req = Net::HTTP::Post.new(uri.path)
       req.set_form_data(data, ';')
+      req.basic_auth(cas_basic_auth_username, cas_basic_auth_passwd) if cas_basic_auth_username and cas_basic_auth_passwd
       https = https_connection(uri)
       https.start {|conn| conn.request(req) }
     end

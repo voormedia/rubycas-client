@@ -218,7 +218,7 @@ module CASClient
             st = controller.session[:cas_last_valid_ticket]
             @@client.ticket_store.cleanup_service_session_lookup(st) if st
             controller.send(:reset_session)
-            controller.send(:redirect_to, client.logout_url(nil, nil, referer))
+            controller.send(:redirect_to, client.logout_url(nil, nil, referer), allow_other_host: true)
           end
 
           def unauthorized!(controller, vr = nil)
@@ -271,7 +271,7 @@ module CASClient
             controller.session[:previous_redirect_to_cas] = Time.now
 
             log.debug("Redirecting to #{redirect_url.inspect}")
-            controller.send(:redirect_to, redirect_url)
+            controller.send(:redirect_to, redirect_url, allow_other_host: true)
           end
 
           private
